@@ -1,0 +1,13 @@
+{
+  "name": "fencing-acquisition-map",
+  "version": "0.1.0",
+  "description": "Grand Street / Unified Fencing Group acquisition sourcing map — buy-box-scored fencing targets.",
+  "type": "module",
+  "scripts": {
+    "build": "python3 build_data.py",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

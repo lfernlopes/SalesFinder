@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Unified Fencing Group — Acquisition Map</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    :root {
+      --bg:#0b1120; --panel:#131c2e; --card:#0f1729; --line:#26324a;
+      --text:#e6ecf5; --muted:#8ea0bd; --accent:#5e99f0;
+      --green:#16a34a; --blue:#0ea5e9; --amber:#f59e0b; --grey:#94a3b8;
+      --gold:#f4b740;
+    }
+    * { box-sizing:border-box; }
+    html,body { margin:0; height:100%; font-family:-apple-system,Segoe UI,Roboto,sans-serif; }
+    #app { display:flex; height:100vh; color:var(--text); background:var(--bg); }
+    #sidebar { width:380px; min-width:380px; background:var(--panel); border-right:1px solid var(--line);
+      display:flex; flex-direction:column; }
+    #map { flex:1; }
+    header { padding:14px 16px; border-bottom:1px solid var(--line); }
+    header h1 { margin:0 0 3px; font-size:15px; letter-spacing:.2px; }
+    header p { margin:0; font-size:11px; color:var(--muted); }
+    .stats { display:flex; gap:8px; padding:12px 16px; border-bottom:1px solid var(--line); }
+    .stat { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:7px 9px; flex:1; font-size:11px; color:var(--muted); }
+    .stat b { display:block; font-size:17px; color:var(--accent); }
+    .controls { padding:12px 16px; border-bottom:1px solid var(--line); overflow-y:auto; max-height:44vh; }
+    .controls h4 { margin:12px 0 6px; font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); }
+    .controls h4:first-child { margin-top:0; }
+    .row2 { display:flex; gap:8px; }
+    label.chk { display:flex; align-items:center; gap:7px; font-size:12px; padding:2px 0; cursor:pointer; }
+    input[type=range] { width:100%; }
+    .rng { font-size:11px; color:var(--muted); display:flex; justify-content:space-between; }
+    select, input[type=number], input[type=search] { width:100%; padding:6px 8px; border-radius:7px;
+      border:1px solid var(--line); background:var(--card); color:var(--text); font-size:12px; }
+    .dot { width:11px; height:11px; border-radius:50%; display:inline-block; }
+    .list { flex:1; overflow-y:auto; }
+    .item { padding:10px 16px; border-bottom:1px solid var(--line); cursor:pointer; }
+    .item:hover { background:var(--card); }
+    .item .top { display:flex; justify-content:space-between; align-items:baseline; gap:6px; }
+    .item .nm { font-size:13px; font-weight:600; }
+    .fitbadge { font-size:10px; font-weight:700; padding:1px 6px; border-radius:6px; color:#04121f; white-space:nowrap; }
+    .item .sub { font-size:11px; color:var(--muted); margin-top:2px; }
+    .item .stars { color:var(--gold); font-weight:600; }
+    .legend { position:absolute; bottom:14px; right:14px; z-index:500; background:rgba(15,23,41,.92);
+      border:1px solid var(--line); border-radius:9px; padding:9px 11px; font-size:11px; color:var(--text); }
+    .legend div { display:flex; align-items:center; gap:7px; margin:2px 0; }
+    /* popup */
+    .lp h3 { margin:0 0 2px; font-size:14px; }
+    .lp .meta { font-size:11px; color:#41506b; margin:1px 0; }
+    .lp .stars { color:#b8860b; font-weight:700; }
+    .lp .crit { margin:7px 0; border-top:1px solid #e2e8f0; padding-top:6px; }
+    .lp .cr { font-size:11px; display:flex; gap:6px; align-items:flex-start; padding:1px 0; }
+    .lp .cr .ic { width:13px; text-align:center; }
+    .lp .pass{color:#16a34a;} .lp .partial{color:#d97706;} .lp .fail{color:#dc2626;} .lp .unknown{color:#94a3b8;}
+    .lp .actions { display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; }
+    .lp a.btn, .lp button.btn { font-size:12px; font-weight:600; text-decoration:none; padding:5px 9px;
+      border-radius:7px; border:none; cursor:pointer; }
+    .lp .call { background:#16a34a; color:#fff; }
+    .lp .site { background:#e2e8f0; color:#0b1120; }
+    .lp .copy { background:#334155; color:#fff; }
+    .lp select { margin-top:8px; }
+    .lp .dilig { font-size:10px; color:#64748b; margin-top:6px; font-style:italic; }
+    .badgeRow { margin:3px 0; }
+    .tag { font-size:10px; padding:1px 6px; border-radius:5px; background:#e2e8f0; color:#0b1120; margin-right:4px; }
+    .tag.buy { background:#16a34a; color:#fff; }
+    .tag.disc { background:#7c3aed; color:#fff; }
+    .lp textarea.notes { width:100%; margin-top:6px; min-height:44px; border-radius:7px;
+      border:1px solid var(--line); padding:6px; font:inherit; font-size:12px; resize:vertical; }
+    #loginOverlay { position:fixed; inset:0; z-index:9999; display:flex; align-items:center;
+      justify-content:center; background:var(--bg); color:var(--text); }
+    #loginBox { width:320px; background:var(--panel); border:1px solid var(--line);
+      border-radius:12px; padding:26px; }
+    #loginBox h2 { margin:0 0 4px; font-size:18px; }
+    #loginBox p { margin:0 0 16px; font-size:12px; color:var(--muted); }
+    #loginBox input { width:100%; padding:9px 11px; margin-bottom:10px; border-radius:8px;
+      border:1px solid var(--line); background:var(--card); color:var(--text); font-size:14px; }
+    #loginBox button { width:100%; padding:10px; border:none; border-radius:8px; cursor:pointer;
+      background:var(--accent); color:#04121f; font-weight:700; font-size:14px; }
+    #liErr { color:#f87171; font-size:12px; min-height:16px; margin-top:8px; }
+    #logout { position:absolute; top:14px; right:14px; font-size:11px; color:var(--muted);
+      background:var(--card); border:1px solid var(--line); border-radius:7px; padding:4px 9px; cursor:pointer; }
+  </style>
+</head>
+<body>
+  <div id="loginOverlay">
+    <div id="loginBox">
+      <h2>SalesFinder</h2>
+      <p>Grand Street Partners — acquisition sourcing. Sign in to continue.</p>
+      <input id="liEmail" type="email" placeholder="Email" autocomplete="username" />
+      <input id="liPass" type="password" placeholder="Password" autocomplete="current-password" />
+      <button id="liBtn">Sign in</button>
+      <div id="liErr"></div>
+    </div>
+  </div>
+  <div id="app" style="display:none">
+    <button id="logout">Sign out</button>
+    <div id="sidebar">
+      <header>
+        <h1>SalesFinder — Fencing Acquisition Map</h1>
+        <p>Grand Street Partners buy box · residential fencing targets · Google reviews weighted</p>
+      </header>
+      <div class="stats">
+        <div class="stat"><b id="stShown">–</b>shown</div>
+        <div class="stat"><b id="stBuy">–</b>meet buy box</div>
+        <div class="stat"><b id="stRating">–</b>avg ★</div>
+        <div class="stat"><b id="stTouched">0</b>worked</div>
+      </div>
+      <div class="controls">
+        <input type="search" id="search" placeholder="Search company, city, contact…" />
+        <label class="chk" style="margin-top:8px"><input type="checkbox" id="fBuy"> Meet buy box only</label>
+        <label class="chk"><input type="checkbox" id="fIndep" checked> Independent owners only (exclude PE/VC)</label>
+        <label class="chk"><input type="checkbox" id="fUnrated"> Include companies with no Google rating</label>
+
+        <h4>Min Google rating</h4>
+        <input type="range" id="fRating" min="0" max="5" step="0.1" value="4.5">
+        <div class="rng"><span>any</span><b id="fRatingV">4.5 ★</b></div>
+
+        <h4>Min # reviews</h4>
+        <input type="range" id="fReviews" min="0" max="500" step="10" value="0">
+        <div class="rng"><span>0</span><b id="fReviewsV">0</b></div>
+
+        <h4>Revenue ($M)</h4>
+        <div class="row2">
+          <input type="number" id="fRevMin" placeholder="min" step="0.5">
+          <input type="number" id="fRevMax" placeholder="max" step="0.5">
+        </div>
+
+        <h4>Source</h4>
+        <select id="fSource">
+          <option value="all">All targets</option>
+          <option value="tracker">Tracker only</option>
+          <option value="discovered">Discovered only (Places)</option>
+          <option value="address">Has street address</option>
+        </select>
+
+        <h4>Sort by</h4>
+        <select id="fSort">
+          <option value="fit">Buy-box fit</option>
+          <option value="reviews"># Google reviews</option>
+          <option value="rating">Google rating</option>
+          <option value="revenue">Revenue</option>
+        </select>
+
+        <h4>Archetype (end market)</h4>
+        <div id="fArche"></div>
+
+        <h4>Tier</h4>
+        <div id="fTier"></div>
+      </div>
+      <div class="list" id="list"></div>
+    </div>
+    <div id="map"></div>
+    <div class="legend" id="legend"></div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script>
+    const FIT_BUCKETS = [
+      { min:70, color:'#16a34a', label:'Strong fit (70+)' },
+      { min:55, color:'#0ea5e9', label:'Good (55–69)' },
+      { min:40, color:'#f59e0b', label:'Partial (40–54)' },
+      { min:0,  color:'#94a3b8', label:'Weak (<40)' },
+    ];
+    const fitColor = (s) => FIT_BUCKETS.find(b => s >= b.min).color;
+    const radius = (n) => 4 + Math.min(11, Math.sqrt(n || 0) / 3);
+    const STATUS = ['Not started','Note sent','Called','Meeting set','Interested','Pass'];
+    const sb = supabase.createClient(window.SUPA_URL, window.SUPA_ANON);
+    let outreach = {};          // company_id -> { status, notes }
+    let currentUser = null;
+    let ALL = [], markers = new Map(), layer;
+
+    const map = L.map('map').setView([39.5, -96], 4.6);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      { attribution:'© OpenStreetMap', maxZoom:18 }).addTo(map);
+    layer = L.layerGroup().addTo(map);
+
+    function esc(s){ return (s==null?'':String(s)).replace(/[<>&"]/g, c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c])); }
+    function money(v){ return v==null ? '—' : '$'+(v/1e6).toFixed(1)+'M'; }
+
+    function updateWorkedCount(){
+      const n = Object.values(outreach).filter(o=>o.status && o.status!=='Not started').length;
+      document.getElementById('stTouched').textContent = n;
+    }
+    async function upsertOutreach(id){
+      const row = { company_id:id, status: outreach[id]?.status || 'Not started',
+        notes: outreach[id]?.notes ?? null, updated_by: currentUser?.id };
+      const { error } = await sb.from('outreach').upsert(row, { onConflict:'company_id' });
+      if (error) console.error('outreach save failed', error);
+    }
+    window.saveStatus = async function(id, val){
+      outreach[id] = { ...(outreach[id]||{}), status: val };
+      updateWorkedCount();
+      await upsertOutreach(id);
+    };
+    window.saveNotes = async function(id, notes){
+      outreach[id] = { ...(outreach[id]||{}), notes };
+      await upsertOutreach(id);
+    };
+
+    window.copyNote = function(id){
+      const c = ALL.find(x=>x.id===id); if(!c) return;
+      const block = [c.contactName||'Owner', c.contactTitle||'', c.company,
+        c.address || [c.city,c.state].filter(Boolean).join(', '),
+        c.phone?('Phone: '+c.phone):'']
+        .filter(Boolean).join('\n');
+      navigator.clipboard.writeText(block);
+    };
+
+    function popup(c){
+      const stars = c.rating!=null ? `<span class="stars">${c.rating.toFixed(1)} ★</span> · ${c.reviews??'?'} reviews` : 'No Google rating';
+      const crit = c.criteria.map(cr=>{
+        const ic = {pass:'✓',partial:'~',fail:'✕',unknown:'?'}[cr.status];
+        return `<div class="cr"><span class="ic ${cr.status}">${ic}</span><span><b>${esc(cr.label)}:</b> ${esc(cr.detail)}</span></div>`;
+      }).join('');
+      const tags = [];
+      if (c.meetsBuyBox) tags.push('<span class="tag buy">Meets buy box</span>');
+      if (c.source==='discovered') tags.push('<span class="tag disc">Discovered (not in tracker)</span>');
+      if (c.southWest) tags.push('<span class="tag">South/West</span>');
+      if (c.tier) tags.push(`<span class="tag">${esc(c.tier)}</span>`);
+      const addrLine = c.address ? `<div class="meta">📮 ${esc(c.address)}</div>` : '';
+      const cur = outreach[c.id]?.status || 'Not started';
+      const opts = STATUS.map(o=>`<option ${o===cur?'selected':''}>${o}</option>`).join('');
+      const site = c.domain ? `<a class="btn site" target="_blank" href="https://${esc(c.domain)}">Website</a>` : '';
+      const call = c.phone ? `<a class="btn call" href="tel:${esc(c.phone)}">📞 ${esc(c.phone)}</a>` : '';
+      return `<div class="lp">
+        <h3>${esc(c.company)} <span style="color:${fitColor(c.fit)};font-size:12px">· fit ${c.fit}</span></h3>
+        <div class="meta">${stars}</div>
+        <div class="meta">${esc(c.archetype||'')} · ${esc(c.ownership||'')}</div>
+        <div class="meta">${esc([c.city,c.state].filter(Boolean).join(', '))} · ${money(c.revenue)} est. rev · ${c.employees?Math.round(c.employees)+' emp':'—'}</div>
+        ${addrLine}
+        <div class="badgeRow">${tags.join('')}</div>
+        ${c.contactName?`<div class="meta"><b>${esc(c.contactName)}</b>${c.contactTitle?', '+esc(c.contactTitle):''}</div>`:''}
+        <div class="crit">${crit}</div>
+        <div class="dilig">Diligence (not in data): DTC vs new-construction, W-2 vs 1099, owner equity-roll intent, valuation.</div>
+        <div class="actions">${call}${site}<button class="btn copy" onclick="copyNote('${esc(c.id)}')">Copy for note</button></div>
+        <select onchange="saveStatus('${esc(c.id)}', this.value)">${opts}</select>
+        <textarea class="notes" placeholder="Shared team notes…" onchange="saveNotes('${esc(c.id)}', this.value)">${esc(outreach[c.id]?.notes||'')}</textarea>
+      </div>`;
+    }
+
+    function passesFilters(c){
+      const q = document.getElementById('search').value.toLowerCase();
+      if (document.getElementById('fBuy').checked && !c.meetsBuyBox) return false;
+      if (document.getElementById('fIndep').checked){
+        const o=(c.ownership||'').toLowerCase();
+        if (o.includes('equity')||o.includes('venture')||o.includes('subsid')||o==='private sub') return false;
+      }
+      const minR = parseFloat(document.getElementById('fRating').value);
+      if (c.rating==null){ if(!document.getElementById('fUnrated').checked) return false; }
+      else if (c.rating < minR) return false;
+      if ((c.reviews||0) < parseInt(document.getElementById('fReviews').value)) return false;
+      const rmin=parseFloat(document.getElementById('fRevMin').value);
+      const rmax=parseFloat(document.getElementById('fRevMax').value);
+      if (!isNaN(rmin) && (c.revenue==null || c.revenue < rmin*1e6)) return false;
+      if (!isNaN(rmax) && (c.revenue==null || c.revenue > rmax*1e6)) return false;
+      const src = document.getElementById('fSource').value;
+      if (src==='tracker' && c.source!=='tracker') return false;
+      if (src==='discovered' && c.source!=='discovered') return false;
+      if (src==='address' && !c.address) return false;
+      if (activeArche.size && !activeArche.has(c.archetype)) return false;
+      if (activeTier.size && !activeTier.has(c.tier)) return false;
+      if (q && !(`${c.company} ${c.city} ${c.contactName||''} ${c.state||''}`.toLowerCase().includes(q))) return false;
+      return true;
+    }
+
+    let activeArche = new Set(), activeTier = new Set();
+
+    function render(){
+      const sort = document.getElementById('fSort').value;
+      const shown = ALL.filter(passesFilters).sort((a,b)=>{
+        if (sort==='reviews') return (b.reviews||0)-(a.reviews||0);
+        if (sort==='rating') return (b.rating||0)-(a.rating||0);
+        if (sort==='revenue') return (b.revenue||0)-(a.revenue||0);
+        return b.fit-a.fit || (b.reviews||0)-(a.reviews||0);
+      });
+      layer.clearLayers(); markers.clear();
+      for (const c of shown){
+        const m = L.circleMarker([c.lat,c.lng], {
+          radius:radius(c.reviews), color:'#0b1120', weight:1,
+          fillColor:fitColor(c.fit), fillOpacity:0.85,
+        }).bindPopup(()=>popup(c), {maxWidth:320});
+        layer.addLayer(m); markers.set(c.id,m);
+      }
+      // stats
+      document.getElementById('stShown').textContent = shown.length;
+      document.getElementById('stBuy').textContent = shown.filter(c=>c.meetsBuyBox).length;
+      const rated = shown.filter(c=>c.rating!=null);
+      document.getElementById('stRating').textContent = rated.length
+        ? (rated.reduce((s,c)=>s+c.rating,0)/rated.length).toFixed(2) : '–';
+      // list (first 250)
+      const list = document.getElementById('list'); list.innerHTML='';
+      shown.slice(0,250).forEach(c=>{
+        const el=document.createElement('div'); el.className='item';
+        el.innerHTML = `<div class="top"><span class="nm">${esc(c.company)}</span>
+          <span class="fitbadge" style="background:${fitColor(c.fit)}">${c.fit}</span></div>
+          <div class="sub">${c.rating!=null?`<span class="stars">${c.rating.toFixed(1)}★</span> ${c.reviews??''} rev`:'no rating'}
+            · ${esc([c.city,c.state].filter(Boolean).join(', '))} · ${money(c.revenue)}</div>
+          <div class="sub">${esc(c.archetype||'')}${c.phone?' · '+esc(c.phone):''}</div>`;
+        el.onclick=()=>{ map.setView([c.lat,c.lng], 9); markers.get(c.id)?.openPopup(); };
+        list.appendChild(el);
+      });
+      if (shown.length>250){
+        const n=document.createElement('div'); n.className='item'; n.style.color='var(--muted)';
+        n.textContent=`Showing first 250 of ${shown.length} in list — all ${shown.length} are on the map.`;
+        list.appendChild(n);
+      }
+    }
+
+    function buildLegend(){
+      const el=document.getElementById('legend');
+      el.innerHTML = '<div style="font-weight:700;margin-bottom:4px">Buy-box fit</div>' +
+        FIT_BUCKETS.map(b=>`<div><span class="dot" style="background:${b.color}"></span>${b.label}</div>`).join('') +
+        '<div style="margin-top:5px;color:#8ea0bd">pin size = # reviews</div>';
+    }
+
+    function buildChecks(id, values, target){
+      const box=document.getElementById(id);
+      values.forEach(v=>{
+        const l=document.createElement('label'); l.className='chk';
+        l.innerHTML=`<input type="checkbox" value="${esc(v)}"> ${esc(v)}`;
+        l.querySelector('input').onchange=(e)=>{ e.target.checked?target.add(v):target.delete(v); render(); };
+        box.appendChild(l);
+      });
+    }
+
+    function normalizeRow(r){
+      return {
+        id:r.id, company:r.company, domain:r.domain, tier:r.tier, confidence:r.confidence,
+        archetype:r.archetype, ownership:r.ownership, parent:r.parent, description:r.description,
+        founded:r.founded, revenue:r.revenue, employees:r.employees, rating:r.rating, reviews:r.reviews,
+        contactName:r.contact_name, contactTitle:r.contact_title, phone:r.phone, email:r.email,
+        linkedin:r.linkedin, hq:r.hq, city:r.city, state:r.state, lat:r.lat, lng:r.lng,
+        southWest:r.south_west, vinyl:r.vinyl, composite:r.composite, fit:r.fit,
+        meetsBuyBox:r.meets_buy_box, criteria:r.criteria||[], source:r.source, address:r.address,
+        placeId:r.place_id, placeRating:r.place_rating, placeReviews:r.place_reviews,
+      };
+    }
+    async function loadCompanies(){
+      let all=[], from=0, page=1000;
+      while(true){
+        const { data, error } = await sb.from('companies').select('*')
+          .order('fit',{ascending:false}).range(from, from+page-1);
+        if (error){ console.error('load companies', error); break; }
+        all = all.concat((data||[]).map(normalizeRow));
+        if (!data || data.length < page) break;
+        from += page;
+      }
+      return all;
+    }
+    async function loadOutreach(){
+      const { data, error } = await sb.from('outreach').select('company_id,status,notes');
+      if (error){ console.error('load outreach', error); return {}; }
+      const m={}; (data||[]).forEach(r=> m[r.company_id]={status:r.status, notes:r.notes});
+      return m;
+    }
+
+    async function startApp(){
+      document.getElementById('loginOverlay').style.display='none';
+      document.getElementById('app').style.display='flex';
+      ALL = await loadCompanies();
+      outreach = await loadOutreach();
+      updateWorkedCount();
+      const arches=[...new Set(ALL.map(c=>c.archetype).filter(Boolean))].sort();
+      const tiers=[...new Set(ALL.map(c=>c.tier).filter(Boolean))].sort();
+      buildChecks('fArche', arches, activeArche);
+      buildChecks('fTier', tiers, activeTier);
+      buildLegend();
+      document.getElementById('fRating').oninput=(e)=>{ document.getElementById('fRatingV').textContent=e.target.value+' ★'; render(); };
+      document.getElementById('fReviews').oninput=(e)=>{ document.getElementById('fReviewsV').textContent=e.target.value; render(); };
+      ['search','fBuy','fIndep','fUnrated','fRevMin','fRevMax','fSort','fSource'].forEach(id=>{
+        document.getElementById(id).oninput=render; document.getElementById(id).onchange=render;
+      });
+      render();
+      setTimeout(()=>map.invalidateSize(), 200);
+    }
+
+    async function doLogin(){
+      const email=document.getElementById('liEmail').value.trim();
+      const password=document.getElementById('liPass').value;
+      const err=document.getElementById('liErr'); err.textContent='';
+      document.getElementById('liBtn').disabled=true;
+      const { error } = await sb.auth.signInWithPassword({ email, password });
+      document.getElementById('liBtn').disabled=false;
+      if (error){ err.textContent=error.message; return; }
+      const { data:{ session } } = await sb.auth.getSession();
+      currentUser = session.user;
+      await startApp();
+    }
+    document.getElementById('liBtn').onclick=doLogin;
+    document.getElementById('liPass').addEventListener('keydown',e=>{ if(e.key==='Enter') doLogin(); });
+    document.getElementById('logout').onclick=async()=>{ await sb.auth.signOut(); location.reload(); };
+
+    async function boot(){
+      const { data:{ session } } = await sb.auth.getSession();
+      if (!session){ document.getElementById('loginOverlay').style.display='flex'; return; }
+      currentUser = session.user;
+      await startApp();
+    }
+    boot();
+  </script>
+</body>
+</html>
