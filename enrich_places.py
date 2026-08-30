@@ -221,11 +221,30 @@ def place_to_company(p):
         "address": addr, "placeId": p.get("id"),
     }
 
-def do_discover(companies, api_key, regions, live):
+def national_regions(top_n=1000, pad=0.12):
+    """Build search tiles around the top-N US cities by population."""
+    import csv
+    path = os.path.join(HERE, "us-cities-top-1k.csv")
+    rows = []
+    with open(path, newline="") as f:
+        for r in csv.DictReader(f):
+            try:
+                lat, lon, pop = float(r["lat"]), float(r["lon"]), int(r["Population"])
+            except (ValueError, KeyError):
+                continue
+            rows.append((pop, f'{r["City"]},{r["State"]}', lat, lon))
+    rows.sort(reverse=True)
+    out = []
+    for _, name, lat, lon in rows[:top_n]:
+        out.append((name, (lat - pad, lon - pad), (lat + pad, lon + pad)))
+    return out
+
+def do_discover(companies, api_key, regions, live, queries=None):
+    queries = queries or QUERIES
     by_name_city, by_domain = index_tracker(companies)
     seen_place, added, matched = set(), [], 0
     for name, low, high in regions:
-        for q in QUERIES:
+        for q in queries:
             for p in search_text(q, (low, high), api_key, live):
                 pid = p.get("id")
                 if not pid or pid in seen_place: continue
@@ -295,17 +314,24 @@ def main():
     ap.add_argument("--scope", default="buybox",
                     help="enrich scope: buybox | all | state:TX | top:200")
     ap.add_argument("--limit", type=int, default=len(REGIONS),
-                    help="number of discovery regions to use")
+                    help="number of discovery regions to use (metro list)")
+    ap.add_argument("--national", action="store_true",
+                    help="discover across the top-N US cities nationwide")
+    ap.add_argument("--top", type=int, default=1000,
+                    help="national mode: number of top cities to cover")
+    ap.add_argument("--queries", type=int, default=len(QUERIES),
+                    help="how many query variants to use (1-3)")
     ap.add_argument("--estimate", action="store_true", help="print cost, spend nothing")
     ap.add_argument("--go", action="store_true", help="actually call the API")
     args = ap.parse_args()
 
     data = load_companies()
     companies = data["companies"]
-    regions = REGIONS[:args.limit]
+    regions = national_regions(args.top) if args.national else REGIONS[:args.limit]
+    queries = QUERIES[:max(1, min(args.queries, len(QUERIES)))]
 
     # cost estimate
-    disc_req = len(regions) * len(QUERIES) * 3 if args.discover else 0
+    disc_req = len(regions) * len(queries) * 3 if args.discover else 0
     enr_targets = do_enrich_count(companies, args.scope) if args.enrich else 0
     total_req = disc_req + enr_targets
     est = total_req / 1000 * ENTERPRISE_PER_1000
@@ -324,7 +350,7 @@ def main():
     if args.enrich:
         do_enrich(companies, api_key, args.scope, live)
     if args.discover:
-        companies += do_discover(companies, api_key, regions, live)
+        companies += do_discover(companies, api_key, regions, live, queries)
 
     # de-dup by id (safety so repeated discovery runs never stack rows)
     seen, uniq = set(), []

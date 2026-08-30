@@ -80,6 +80,8 @@
     #liErr { color:#f87171; font-size:12px; min-height:16px; margin-top:8px; }
     #logout { position:absolute; top:14px; right:14px; font-size:11px; color:var(--muted);
       background:var(--card); border:1px solid var(--line); border-radius:7px; padding:4px 9px; cursor:pointer; }
+    #exportBtn { position:absolute; top:14px; right:80px; font-size:11px; color:#04121f; font-weight:700;
+      background:var(--accent); border:none; border-radius:7px; padding:4px 10px; cursor:pointer; }
   </style>
 </head>
 <body>
@@ -94,6 +96,7 @@
     </div>
   </div>
   <div id="app" style="display:none">
+    <button id="exportBtn">⬇ Export Excel</button>
     <button id="logout">Sign out</button>
     <div id="sidebar">
       <header>
@@ -170,7 +173,7 @@
     const sb = supabase.createClient(window.SUPA_URL, window.SUPA_ANON);
     let outreach = {};          // company_id -> { status, notes }
     let currentUser = null;
-    let ALL = [], markers = new Map(), layer;
+    let ALL = [], markers = new Map(), layer, lastShown = [];
 
     const map = L.map('map').setView([39.5, -96], 4.6);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -276,6 +279,7 @@
         if (sort==='revenue') return (b.revenue||0)-(a.revenue||0);
         return b.fit-a.fit || (b.reviews||0)-(a.reviews||0);
       });
+      lastShown = shown;
       layer.clearLayers(); markers.clear();
       for (const c of shown){
         const m = L.circleMarker([c.lat,c.lng], {
@@ -357,6 +361,35 @@
       return m;
     }
 
+    function csvCell(v){
+      if (v==null) return '';
+      const s = (typeof v==='boolean') ? (v?'Yes':'No') : String(v);
+      return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+    }
+    function exportCSV(){
+      const cols = [
+        ['Company','company'],['Tier','tier'],['Archetype','archetype'],['Ownership','ownership'],
+        ['Owner / Contact','contactName'],['Title','contactTitle'],['Phone','phone'],['Email','email'],
+        ['Website','domain'],['City','city'],['State','state'],['Address','address'],
+        ['Google Rating','rating'],['# Reviews','reviews'],['Est Revenue','revenue'],
+        ['Fit Score','fit'],['Meets Buy Box','meetsBuyBox'],['Source','source'],
+      ];
+      const header = cols.map(c=>c[0]).concat(['Outreach Status','Notes']);
+      const lines = [header.map(csvCell).join(',')];
+      for (const c of lastShown){
+        const o = outreach[c.id] || {};
+        const row = cols.map(([,k])=>csvCell(c[k]));
+        row.push(csvCell(o.status||''), csvCell(o.notes||''));
+        lines.push(row.join(','));
+      }
+      const blob = new Blob(['﻿'+lines.join('\r\n')], {type:'text/csv;charset=utf-8'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const d = new Date().toISOString().slice(0,10);
+      a.href = url; a.download = `salesfinder-targets-${d}.csv`; a.click();
+      URL.revokeObjectURL(url);
+    }
+
     async function startApp(){
       document.getElementById('loginOverlay').style.display='none';
       document.getElementById('app').style.display='flex';
@@ -373,6 +406,7 @@
       ['search','fBuy','fIndep','fUnrated','fRevMin','fRevMax','fSort','fSource'].forEach(id=>{
         document.getElementById(id).oninput=render; document.getElementById(id).onchange=render;
       });
+      document.getElementById('exportBtn').onclick = exportCSV;
       render();
       setTimeout(()=>map.invalidateSize(), 200);
     }
